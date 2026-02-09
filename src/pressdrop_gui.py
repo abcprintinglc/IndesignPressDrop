@@ -26,7 +26,8 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("PressDrop Bleed Fixer (v2.2 Pro)")
-        self.geometry("880x620")
+        self.geometry("900x700")
+        self.minsize(820, 620)
 
         self.presets = load_presets(resource_path("../presets/presets.json"))  # dict name->settings
         self.presets_path = resource_path("../presets/presets.json")
@@ -61,8 +62,18 @@ class App(tk.Tk):
         pad_y = 10
         pad_x = 14
 
-        container = tk.Frame(self, bg=BG)
-        container.pack(fill="both", expand=True, padx=pad_x, pady=pad_y)
+        scroll_container = tk.Frame(self, bg=BG)
+        scroll_container.pack(fill="both", expand=True, padx=pad_x, pady=pad_y)
+
+        canvas = tk.Canvas(scroll_container, bg=BG, highlightthickness=0)
+        scrollbar = tk.Scrollbar(scroll_container, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+
+        container = tk.Frame(canvas, bg=BG)
+        canvas_window = canvas.create_window((0, 0), window=container, anchor="nw")
 
         def make_label(row, text):
             lbl = tk.Label(
@@ -275,6 +286,15 @@ class App(tk.Tk):
 
         container.columnconfigure(1, weight=1)
 
+        def _on_frame_configure(_event):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        def _on_canvas_configure(event):
+            canvas.itemconfig(canvas_window, width=event.width)
+
+        container.bind("<Configure>", _on_frame_configure)
+        canvas.bind("<Configure>", _on_canvas_configure)
+
     def _write_indesign_launcher(self, job_json_path: str) -> str:
         script_src = resource_path("../indesign/PressDropBleedFixer.jsx")
         launcher_dir = os.path.dirname(job_json_path)
@@ -295,8 +315,23 @@ class App(tk.Tk):
                 subprocess.Popen(["open", "-a", "Adobe InDesign", script_path])
                 return
             if os.name == "nt":
-                os.startfile(script_path)  # type: ignore[attr-defined]
-                return
+                common_paths = [
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign 2024\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign 2023\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign 2022\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign 2021\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign 2020\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign 2024\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign 2023\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign 2022\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign 2021\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign 2020\\InDesign.exe",
+                ]
+                for candidate in common_paths:
+                    if os.path.exists(candidate):
+                        subprocess.Popen([candidate, "-script", script_path])
+                        return
+                raise RuntimeError("InDesign executable not found. Set the InDesign App Path.")
             subprocess.Popen(["xdg-open", script_path])
         except Exception as exc:
             raise RuntimeError(
