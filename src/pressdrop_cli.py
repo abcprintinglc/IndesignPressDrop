@@ -46,6 +46,7 @@ def main():
     p.add_argument("--out", required=True, help="Output folder")
     p.add_argument("--basename", default=None, help="Base filename (default = input filename)")
     p.add_argument("--emit_job", action="store_true", help="Also write a job.json next to output PDF (for InDesign JSX)")
+    p.add_argument("--auto_generative_fill", action="store_true", help="Auto-trigger Generative Fill in the InDesign JSX")
 
     args = p.parse_args()
 
@@ -62,6 +63,7 @@ def main():
         crop_marks=args.crop_marks,
         out_dir=args.out,
         basename=args.basename,
+        auto_generative_fill=args.auto_generative_fill,
         emit_job=args.emit_job,
     )
 
@@ -71,7 +73,7 @@ def main():
 
     if args.emit_job:
         print(f"Wrote job: {job['output']['job_json_path']}")
-        print("Run InDesign JSX: indesign/PressDrop_Import.job.jsx (from Scripts panel).")
+        print("Run InDesign JSX: indesign/PressDropBleedFixer.jsx (from Scripts panel).")
 
 
 if __name__ == "__main__":
