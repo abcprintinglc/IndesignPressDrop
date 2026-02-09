@@ -305,6 +305,39 @@ class App(tk.Tk):
 
     def _export_pdf_to_png(self, pdf_path: str, dpi: int) -> list[str]:
         outputs: list[str] = []
+        gs_path = shutil.which("gswin64c") or shutil.which("gswin32c") or shutil.which("gs")
+        if not gs_path and os.name == "nt":
+            common_bins = [
+                r"C:\Program Files\gs\gs10.05.0\bin",
+                r"C:\Program Files\gs\gs10.04.0\bin",
+                r"C:\Program Files\gs\gs10.03.0\bin",
+                r"C:\Program Files\gs\gs10.02.0\bin",
+                r"C:\Program Files\gs\gs10.01.2\bin",
+                r"C:\Program Files\gs\gs10.01.1\bin",
+                r"C:\Program Files\gs\gs10.01.0\bin",
+                r"C:\Program Files\gs\gs10.00.0\bin",
+                r"C:\Program Files (x86)\gs\gs10.05.0\bin",
+                r"C:\Program Files (x86)\gs\gs10.04.0\bin",
+                r"C:\Program Files (x86)\gs\gs10.03.0\bin",
+                r"C:\Program Files (x86)\gs\gs10.02.0\bin",
+                r"C:\Program Files (x86)\gs\gs10.01.2\bin",
+                r"C:\Program Files (x86)\gs\gs10.01.1\bin",
+                r"C:\Program Files (x86)\gs\gs10.01.0\bin",
+                r"C:\Program Files (x86)\gs\gs10.00.0\bin",
+            ]
+            for bin_path in common_bins:
+                candidate = os.path.join(bin_path, "gswin64c.exe")
+                if os.path.exists(candidate):
+                    gs_path = candidate
+                    os.environ["GS"] = candidate
+                    os.environ["PATH"] = bin_path + os.pathsep + os.environ.get("PATH", "")
+                    break
+                candidate = os.path.join(bin_path, "gswin32c.exe")
+                if os.path.exists(candidate):
+                    gs_path = candidate
+                    os.environ["GS"] = candidate
+                    os.environ["PATH"] = bin_path + os.pathsep + os.environ.get("PATH", "")
+                    break
         try:
             with Image.open(pdf_path) as img:
                 total_frames = getattr(img, "n_frames", 1)
@@ -316,10 +349,9 @@ class App(tk.Tk):
                     rgb.save(out_path, dpi=(dpi, dpi))
                     outputs.append(out_path)
         except Exception as exc:
-            gs_path = shutil.which("gswin64c") or shutil.which("gswin32c") or shutil.which("gs")
             raise RuntimeError(
                 "Could not export PNGs. PDF rasterization requires Ghostscript or Poppler."
-                + ("" if gs_path else " Ghostscript was not found on PATH; restart the app after installing.")
+                + ("" if gs_path else " Ghostscript was not found on PATH; set GS or PATH and restart.")
             ) from exc
         return outputs
 
