@@ -49,6 +49,7 @@ class App(tk.Tk):
         self.open_output_in_indesign = tk.BooleanVar(value=False)
         self.export_png = tk.BooleanVar(value=False)
         self.export_dpi = tk.StringVar(value="1200")
+        self.auto_generative_fill = tk.BooleanVar(value=False)
         self.panel_split = tk.StringVar(value="none")
         self.panel_margin = tk.StringVar(value="0.125")
         self.indesign_app = tk.StringVar(value=os.environ.get("INDESIGN_APP", ""))
@@ -493,6 +494,8 @@ class App(tk.Tk):
             self.export_png.set(bool(data["export_png"]))
         if "export_dpi" in data:
             self.export_dpi.set(str(data["export_dpi"]))
+        if "auto_generative_fill" in data:
+            self.auto_generative_fill.set(bool(data["auto_generative_fill"]))
         if "panel_split" in data:
             self.panel_split.set(str(data["panel_split"]))
         if "panel_margin" in data:
@@ -515,6 +518,7 @@ class App(tk.Tk):
             "open_output_in_indesign": bool(self.open_output_in_indesign.get()),
             "export_png": bool(self.export_png.get()),
             "export_dpi": self.export_dpi.get().strip(),
+            "auto_generative_fill": bool(self.auto_generative_fill.get()),
             "panel_split": self.panel_split.get().strip(),
             "panel_margin": self.panel_margin.get().strip(),
             "indesign_app": self.indesign_app.get().strip(),
