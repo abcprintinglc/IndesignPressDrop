@@ -16,6 +16,10 @@ if (!JSON.parse) {
 
 #target "InDesign"
 
+var PRESSDROP_JOB_JSON_PATH = typeof PRESSDROP_JOB_JSON_PATH !== "undefined" ? PRESSDROP_JOB_JSON_PATH : null;
+var PRESSDROP_AUTO_GENERATIVE_FILL = typeof PRESSDROP_AUTO_GENERATIVE_FILL !== "undefined" ? PRESSDROP_AUTO_GENERATIVE_FILL : null;
+var PRESSDROP_OUTLINE_TEXT = typeof PRESSDROP_OUTLINE_TEXT !== "undefined" ? PRESSDROP_OUTLINE_TEXT : null;
+
 function readTextFile(file) {
   file.encoding = "UTF-8";
   file.open("r");
@@ -72,11 +76,53 @@ function parsePages(spec, maxPages) {
     return pages;
 }
 
+function pickJobFile() {
+  if (PRESSDROP_JOB_JSON_PATH) {
+    var preselected = File(PRESSDROP_JOB_JSON_PATH);
+    if (preselected.exists) return preselected;
+  }
+  return File.openDialog("Select a PressDrop job JSON (*.job.json)", "JSON:*.json");
+}
+
+function runGenerativeFill() {
+  var actionNames = ["Generative Fill", "Generate Image", "Generate Fill"];
+  for (var i = 0; i < actionNames.length; i++) {
+    var action = app.menuActions.itemByName(actionNames[i]);
+    if (action && action.isValid) {
+      action.invoke();
+      return true;
+    }
+  }
+  return false;
+}
+
+function outlineAllText(doc) {
+  var outlined = false;
+  for (var i = doc.stories.length - 1; i >= 0; i--) {
+    var story = doc.stories[i];
+    try {
+      if (story && story.texts && story.texts.length > 0) {
+        story.texts[0].createOutlines();
+        outlined = true;
+      }
+    } catch (e) {
+      // ignore outline failures
+    }
+  }
+  return outlined;
+}
+
 function main() {
-  var jobFile = File.openDialog("Select a PressDrop job JSON (*.job.json)", "JSON:*.json");
+  var jobFile = pickJobFile();
   if (!jobFile) return;
 
   var job = JSON.parse(readTextFile(jobFile));
+  var autoFill = false;
+  if (job && job.indesign && job.indesign.auto_generative_fill) autoFill = true;
+  if (PRESSDROP_AUTO_GENERATIVE_FILL !== null) autoFill = PRESSDROP_AUTO_GENERATIVE_FILL === true;
+  var outlineText = false;
+  if (job && job.indesign && job.indesign.outline_text) outlineText = true;
+  if (PRESSDROP_OUTLINE_TEXT !== null) outlineText = PRESSDROP_OUTLINE_TEXT === true;
 
   // 1. Setup Document Dimensions
   var unit = job.layout.trim.unit || "in";
@@ -166,10 +212,25 @@ function main() {
           
           // Optional: If you want to force it to fill the bleed box exactly
           // frame.fit(FitOptions.FILL_PROPORTIONALLY); 
+
+          if (autoFill) {
+            frame.select();
+            var invoked = runGenerativeFill();
+            if (!invoked) {
+              alert("Generative Fill menu not found. Open it manually (Window > Generative Fill).");
+            }
+          }
           
       } catch(e) {
           frame.contents = "Error placing page " + pageNum;
       }
+  }
+
+  if (outlineText) {
+    var outlined = outlineAllText(doc);
+    if (!outlined) {
+      alert("No editable text found to outline. PDFs placed as links are not editable.");
+    }
   }
 
   doc.save(outIndd);
