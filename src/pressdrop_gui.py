@@ -17,7 +17,7 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 # Rasterize PDFs to PNGs when needed
 from PIL import Image
 
-from core import build_press_pdf, load_presets, make_job
+from core import MM_PER_INCH, POINTS_PER_INCH, build_press_pdf, load_presets, make_job, parse_bleed, parse_size
 
 
 def resource_path(rel: str) -> str:
@@ -48,6 +48,8 @@ class App(tk.Tk):
         self.open_output_in_indesign = tk.BooleanVar(value=False)
         self.export_png = tk.BooleanVar(value=False)
         self.export_dpi = tk.StringVar(value="1200")
+        self.panel_split = tk.StringVar(value="none")
+        self.panel_margin = tk.StringVar(value="0.125")
         self.indesign_app = tk.StringVar(value=os.environ.get("INDESIGN_APP", ""))
 
         self._load_defaults()
@@ -263,6 +265,16 @@ class App(tk.Tk):
         make_entry(row, self.export_dpi)
 
         row += 1
+        make_label(row, "Panel Split (optional):")
+        ttk.Combobox(container, values=["none", "trifold", "quadfold"], textvariable=self.panel_split, state="readonly").grid(
+            row=row, column=1, sticky="ew", padx=(14, 10), pady=6
+        )
+
+        row += 1
+        make_label(row, "Panel Text Margin (in):")
+        make_entry(row, self.panel_margin)
+
+        row += 1
         run_btn = tk.Button(
             container,
             text="Run",
@@ -306,6 +318,79 @@ class App(tk.Tk):
                 "Could not export PNGs. PDF rasterization requires Ghostscript or Poppler."
             ) from exc
         return outputs
+
+    def _to_inches(self, value: float, unit: str) -> float:
+        unit = (unit or "in").lower().strip()
+        if unit in ("in", "inch", "inches"):
+            return float(value)
+        if unit in ("mm", "millimeter", "millimeters"):
+            return float(value) / MM_PER_INCH
+        if unit in ("pt", "pts", "point", "points"):
+            return float(value) / POINTS_PER_INCH
+        raise ValueError(f"Unsupported unit: {unit}")
+
+    def _split_panels(
+        self,
+        png_path: str,
+        panel_count: int,
+        trim_w_in: float,
+        trim_h_in: float,
+        bleed: dict,
+        margin_in: float,
+    ) -> tuple[list[str], list[str]]:
+        panel_outputs: list[str] = []
+        safe_outputs: list[str] = []
+        bleed_left = float(bleed["left"])
+        bleed_right = float(bleed["right"])
+        bleed_top = float(bleed["top"])
+        bleed_bottom = float(bleed["bottom"])
+        total_w_in = trim_w_in + bleed_left + bleed_right
+        total_h_in = trim_h_in + bleed_top + bleed_bottom
+        panel_trim_w = trim_w_in / panel_count
+
+        with Image.open(png_path) as img:
+            img = img.convert("RGB")
+            px_per_in_x = img.width / total_w_in
+            px_per_in_y = img.height / total_h_in
+            for idx in range(panel_count):
+                x0_in = bleed_left + panel_trim_w * idx
+                x1_in = bleed_left + panel_trim_w * (idx + 1)
+                if idx == 0:
+                    x0_in = 0
+                if idx == panel_count - 1:
+                    x1_in = total_w_in
+                y0_in = 0
+                y1_in = total_h_in
+
+                crop = img.crop(
+                    (
+                        int(round(x0_in * px_per_in_x)),
+                        int(round(y0_in * px_per_in_y)),
+                        int(round(x1_in * px_per_in_x)),
+                        int(round(y1_in * px_per_in_y)),
+                    )
+                )
+                panel_path = os.path.splitext(png_path)[0] + f"_panel_{idx + 1}.png"
+                crop.save(panel_path)
+                panel_outputs.append(panel_path)
+
+                if margin_in > 0:
+                    safe_x0 = bleed_left + panel_trim_w * idx + margin_in
+                    safe_x1 = bleed_left + panel_trim_w * (idx + 1) - margin_in
+                    safe_y0 = bleed_top + margin_in
+                    safe_y1 = bleed_top + trim_h_in - margin_in
+                    safe = img.crop(
+                        (
+                            int(round(safe_x0 * px_per_in_x)),
+                            int(round(safe_y0 * px_per_in_y)),
+                            int(round(safe_x1 * px_per_in_x)),
+                            int(round(safe_y1 * px_per_in_y)),
+                        )
+                    )
+                    safe_path = os.path.splitext(png_path)[0] + f"_panel_{idx + 1}_safe.png"
+                    safe.save(safe_path)
+                    safe_outputs.append(safe_path)
+        return panel_outputs, safe_outputs
 
     def _launch_indesign_file(self, file_path: str) -> None:
         app_path = self.indesign_app.get().strip()
@@ -405,6 +490,10 @@ class App(tk.Tk):
             self.export_png.set(bool(data["export_png"]))
         if "export_dpi" in data:
             self.export_dpi.set(str(data["export_dpi"]))
+        if "panel_split" in data:
+            self.panel_split.set(str(data["panel_split"]))
+        if "panel_margin" in data:
+            self.panel_margin.set(str(data["panel_margin"]))
         if "indesign_app" in data:
             self.indesign_app.set(data["indesign_app"])
 
@@ -422,6 +511,8 @@ class App(tk.Tk):
             "open_output_in_indesign": bool(self.open_output_in_indesign.get()),
             "export_png": bool(self.export_png.get()),
             "export_dpi": self.export_dpi.get().strip(),
+            "panel_split": self.panel_split.get().strip(),
+            "panel_margin": self.panel_margin.get().strip(),
             "indesign_app": self.indesign_app.get().strip(),
         }
 
@@ -542,6 +633,31 @@ class App(tk.Tk):
                 dpi_value = int(self.export_dpi.get().strip() or "1200")
                 png_outputs = self._export_pdf_to_png(outputs[0], dpi_value)
                 msg += "\n\nPNGs:\n" + "\n".join(png_outputs)
+                split_mode = self.panel_split.get().strip().lower()
+                if split_mode in ("trifold", "quadfold"):
+                    trim_w, trim_h, unit = parse_size(self.size.get().strip())
+                    bleed_vals = parse_bleed(self.bleed.get().strip(), unit)
+                    trim_w_in = self._to_inches(trim_w, unit)
+                    trim_h_in = self._to_inches(trim_h, unit)
+                    margin_in = float(self.panel_margin.get().strip() or "0")
+                    panel_count = 3 if split_mode == "trifold" else 4
+                    for png_path in png_outputs:
+                        panels, safe_panels = self._split_panels(
+                            png_path,
+                            panel_count,
+                            trim_w_in,
+                            trim_h_in,
+                            {
+                                "left": self._to_inches(bleed_vals["left"], unit),
+                                "right": self._to_inches(bleed_vals["right"], unit),
+                                "top": self._to_inches(bleed_vals["top"], unit),
+                                "bottom": self._to_inches(bleed_vals["bottom"], unit),
+                            },
+                            margin_in,
+                        )
+                        msg += "\n\nPanels:\n" + "\n".join(panels)
+                        if safe_panels:
+                            msg += "\n\nSafe Areas:\n" + "\n".join(safe_panels)
 
             if self.open_output_in_indesign.get():
                 to_open = png_outputs[0] if png_outputs else outputs[0]

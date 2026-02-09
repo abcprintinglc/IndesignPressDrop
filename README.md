@@ -59,6 +59,8 @@ The desktop GUI includes:
 - **Open output PDF in InDesign (no script)** — opens the PDF in InDesign.
 - **Export PNGs for Generative Fill** — rasterizes the press PDF into PNGs at the chosen DPI.
 - **Export DPI (PNG)** — default 1200 DPI.
+- **Panel Split** — split exported PNGs into trifold (3) or quadfold (4) panels.
+- **Panel Text Margin (in)** — generates safe-area crops with the specified margin per panel.
 - **Save Default** — stores your current GUI settings to `presets/defaults.json` for next launch.
 - **Save Preset** — saves trim/bleed/fit/anchor settings into `presets/presets.json`.
 
