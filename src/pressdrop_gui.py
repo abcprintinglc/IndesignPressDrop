@@ -44,6 +44,7 @@ class App(tk.Tk):
         self.crop_marks = tk.BooleanVar(value=True)
         self.make_indd = tk.BooleanVar(value=False)
         self.launch_indesign = tk.BooleanVar(value=False)
+        self.open_output_in_indesign = tk.BooleanVar(value=False)
         self.auto_generative_fill = tk.BooleanVar(value=False)
         self.indesign_app = tk.StringVar(value=os.environ.get("INDESIGN_APP", ""))
 
@@ -256,6 +257,20 @@ class App(tk.Tk):
         cb3.grid(row=row, column=1, sticky="w", padx=(14, 10), pady=(2, 4))
 
         row += 1
+        cb_output = tk.Checkbutton(
+            container,
+            text="Open output PDF in InDesign (no script)",
+            variable=self.open_output_in_indesign,
+            bg=BG,
+            fg=TXT,
+            activebackground=BG,
+            activeforeground=TXT,
+            selectcolor=BG,
+            font=("Segoe UI", 10),
+        )
+        cb_output.grid(row=row, column=1, sticky="w", padx=(14, 10), pady=(2, 4))
+
+        row += 1
         cb4 = tk.Checkbutton(
             container,
             text="Auto-trigger Generative Fill (if available)",
@@ -367,6 +382,67 @@ class App(tk.Tk):
                 "Could not launch InDesign. Provide the InDesign App Path or run the JSX script manually."
             ) from exc
 
+    def _launch_indesign_file(self, file_path: str) -> None:
+        app_path = self.indesign_app.get().strip()
+        try:
+            if app_path:
+                subprocess.Popen([app_path, file_path])
+                return
+            if sys.platform.startswith("darwin"):
+                subprocess.Popen(["open", "-a", "Adobe InDesign", file_path])
+                return
+            if os.name == "nt":
+                path_candidate = shutil.which("InDesign.exe")
+                if path_candidate:
+                    subprocess.Popen([path_candidate, file_path])
+                    return
+                common_paths = [
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign 2026\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign 2025\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign 2024\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign 2023\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign 2022\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign 2021\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign 2020\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign CC 2019\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign CC 2018\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign CC 2017\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign CC 2016\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign CC 2015\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign CC 2014\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign CC\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign CS6\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign CS5\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign CS4\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign CS3\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign 2024\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign 2023\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign 2022\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign 2021\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign 2020\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CC 2019\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CC 2018\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CC 2017\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CC 2016\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CC 2015\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CC 2014\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CC\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CS6\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CS5\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CS4\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CS3\\InDesign.exe",
+                ]
+                for candidate in common_paths:
+                    if os.path.exists(candidate):
+                        subprocess.Popen([candidate, file_path])
+                        return
+                raise RuntimeError("InDesign executable not found. Set the InDesign App Path.")
+            subprocess.Popen(["xdg-open", file_path])
+        except Exception as exc:
+            raise RuntimeError(
+                "Could not open the output in InDesign. Provide the InDesign App Path or open manually."
+            ) from exc
+
     def _load_defaults(self) -> None:
         if not os.path.exists(self.defaults_path):
             return
@@ -400,6 +476,8 @@ class App(tk.Tk):
             self.make_indd.set(bool(data["make_indd"]))
         if "launch_indesign" in data:
             self.launch_indesign.set(bool(data["launch_indesign"]))
+        if "open_output_in_indesign" in data:
+            self.open_output_in_indesign.set(bool(data["open_output_in_indesign"]))
         if "auto_generative_fill" in data:
             self.auto_generative_fill.set(bool(data["auto_generative_fill"]))
         if "indesign_app" in data:
@@ -417,6 +495,7 @@ class App(tk.Tk):
             "crop_marks": bool(self.crop_marks.get()),
             "make_indd": bool(self.make_indd.get()),
             "launch_indesign": bool(self.launch_indesign.get()),
+            "open_output_in_indesign": bool(self.open_output_in_indesign.get()),
             "auto_generative_fill": bool(self.auto_generative_fill.get()),
             "indesign_app": self.indesign_app.get().strip(),
         }
@@ -557,8 +636,19 @@ class App(tk.Tk):
 
                 if self.launch_indesign.get():
                     launcher_path = self._write_indesign_launcher(job_json_path)
-                    self._launch_indesign_script(launcher_path)
-                    msg += "\n\nLaunching InDesign..."
+                    try:
+                        self._launch_indesign_script(launcher_path)
+                        msg += "\n\nLaunching InDesign..."
+                    except RuntimeError:
+                        if self.open_output_in_indesign.get() and outputs:
+                            self._launch_indesign_file(outputs[0])
+                            msg += "\n\nLaunching InDesign with output PDF..."
+                        else:
+                            raise
+
+            if self.open_output_in_indesign.get() and outputs:
+                self._launch_indesign_file(outputs[0])
+                msg += "\n\nOpening output in InDesign..."
 
             messagebox.showinfo("Done", msg)
             
