@@ -3,12 +3,18 @@
   "size": "11x8.5in",
   "bleed": "0.125",
   "pages": "all",
-  "fit_mode": "stretch_bleed",
+  "fit_mode": "stretch_trim",
   "anchor": "center",
   "bleed_generator": "none",
   "crop_marks": false,
   "make_indd": false,
   "launch_indesign": true,
+  "open_output_in_indesign": false,
+  "export_png": true,
+  "export_dpi": "1200",
   "auto_generative_fill": true,
-  "indesign_app": ""
+  "panel_split": "trifold",
+  "panel_margin": "0.125",
+  "ghostscript_path": "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Ghostscript\\Ghostscript 10.06.0.LNK",
+  "indesign_app": "C:\\Program Files\\Adobe\\Adobe InDesign 2026\\InDesign.exe"
 }
