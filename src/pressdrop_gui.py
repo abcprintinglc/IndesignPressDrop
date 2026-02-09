@@ -52,7 +52,7 @@ class App(tk.Tk):
         self.auto_generative_fill = tk.BooleanVar(value=False)
         self.panel_split = tk.StringVar(value="none")
         self.panel_margin = tk.StringVar(value="0.125")
-        self.indesign_app = tk.StringVar(value=os.environ.get("INDESIGN_APP", ""))
+        self.indesign_app = tk.StringVar(value=self._default_indesign_path())
 
         self._load_defaults()
         self._build()
@@ -316,10 +316,21 @@ class App(tk.Tk):
                     rgb.save(out_path, dpi=(dpi, dpi))
                     outputs.append(out_path)
         except Exception as exc:
+            gs_path = shutil.which("gswin64c") or shutil.which("gswin32c") or shutil.which("gs")
             raise RuntimeError(
                 "Could not export PNGs. PDF rasterization requires Ghostscript or Poppler."
+                + ("" if gs_path else " Ghostscript was not found on PATH; restart the app after installing.")
             ) from exc
         return outputs
+
+    def _default_indesign_path(self) -> str:
+        env_path = os.environ.get("INDESIGN_APP")
+        if env_path:
+            return env_path
+        default_path = r"C:\Program Files\Adobe\Adobe InDesign 2026\InDesign.exe"
+        if os.path.exists(default_path):
+            return default_path
+        return ""
 
     def _to_inches(self, value: float, unit: str) -> float:
         unit = (unit or "in").lower().strip()
