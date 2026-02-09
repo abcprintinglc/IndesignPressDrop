@@ -262,6 +262,52 @@ class App(tk.Tk):
         make_entry(row, self.export_dpi)
 
         row += 1
+        make_label(row, "InDesign App Path (optional):")
+        make_entry(row, self.indesign_app)
+
+        row += 1
+        cb3 = tk.Checkbutton(
+            container,
+            text="Launch InDesign + run job script",
+            variable=self.launch_indesign,
+            bg=BG,
+            fg=TXT,
+            activebackground=BG,
+            activeforeground=TXT,
+            selectcolor=BG,
+            font=("Segoe UI", 10),
+        )
+        cb3.grid(row=row, column=1, sticky="w", padx=(14, 10), pady=(2, 4))
+
+        row += 1
+        cb_output = tk.Checkbutton(
+            container,
+            text="Open output PDF in InDesign (no script)",
+            variable=self.open_output_in_indesign,
+            bg=BG,
+            fg=TXT,
+            activebackground=BG,
+            activeforeground=TXT,
+            selectcolor=BG,
+            font=("Segoe UI", 10),
+        )
+        cb_output.grid(row=row, column=1, sticky="w", padx=(14, 10), pady=(2, 4))
+
+        row += 1
+        cb4 = tk.Checkbutton(
+            container,
+            text="Auto-trigger Generative Fill (if available)",
+            variable=self.auto_generative_fill,
+            bg=BG,
+            fg=TXT,
+            activebackground=BG,
+            activeforeground=TXT,
+            selectcolor=BG,
+            font=("Segoe UI", 10),
+        )
+        cb4.grid(row=row, column=1, sticky="w", padx=(14, 10), pady=(2, 10))
+
+        row += 1
         run_btn = tk.Button(
             container,
             text="Run",
@@ -512,6 +558,7 @@ class App(tk.Tk):
         base = os.path.splitext(os.path.basename(inp))[0] + "_PressDrop"
 
         try:
+            should_emit_job = bool(self.make_indd.get() or self.launch_indesign.get())
             # 1. Create the job structure (BUT don't write JSON yet: emit_job=False)
             job = make_job(
                 input_path=inp,
@@ -525,6 +572,7 @@ class App(tk.Tk):
                 crop_marks=bool(self.crop_marks.get()),
                 out_dir=outdir,
                 basename=base,
+                auto_generative_fill=bool(self.auto_generative_fill.get()),
                 emit_job=False,  # <--- CHANGED: Wait until file is built
             )
 
@@ -543,6 +591,22 @@ class App(tk.Tk):
                 to_open = png_outputs[0] if png_outputs else outputs[0]
                 self._launch_indesign_file(to_open)
                 msg += f"\n\nOpening in InDesign:\n{to_open}"
+
+                if self.launch_indesign.get():
+                    launcher_path = self._write_indesign_launcher(job_json_path)
+                    try:
+                        self._launch_indesign_script(launcher_path)
+                        msg += "\n\nLaunching InDesign..."
+                    except RuntimeError:
+                        if self.open_output_in_indesign.get() and outputs:
+                            self._launch_indesign_file(outputs[0])
+                            msg += "\n\nLaunching InDesign with output PDF..."
+                        else:
+                            raise
+
+            if self.open_output_in_indesign.get() and outputs:
+                self._launch_indesign_file(outputs[0])
+                msg += "\n\nOpening output in InDesign..."
 
             messagebox.showinfo("Done", msg)
             
