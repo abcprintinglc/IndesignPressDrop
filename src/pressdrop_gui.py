@@ -44,6 +44,7 @@ class App(tk.Tk):
         self.anchor = tk.StringVar(value="center")
         self.bleed_generator = tk.StringVar(value="none")
         self.crop_marks = tk.BooleanVar(value=True)
+        self.make_indd = tk.BooleanVar(value=False)
         self.launch_indesign = tk.BooleanVar(value=False)
         self.open_output_in_indesign = tk.BooleanVar(value=False)
         self.export_png = tk.BooleanVar(value=False)
@@ -482,6 +483,8 @@ class App(tk.Tk):
             self.bleed_generator.set(data["bleed_generator"])
         if "crop_marks" in data:
             self.crop_marks.set(bool(data["crop_marks"]))
+        if "make_indd" in data:
+            self.make_indd.set(bool(data["make_indd"]))
         if "launch_indesign" in data:
             self.launch_indesign.set(bool(data["launch_indesign"]))
         if "open_output_in_indesign" in data:
@@ -507,6 +510,7 @@ class App(tk.Tk):
             "anchor": self.anchor.get().strip(),
             "bleed_generator": self.bleed_generator.get().strip(),
             "crop_marks": bool(self.crop_marks.get()),
+            "make_indd": bool(self.make_indd.get()),
             "launch_indesign": bool(self.launch_indesign.get()),
             "open_output_in_indesign": bool(self.open_output_in_indesign.get()),
             "export_png": bool(self.export_png.get()),
