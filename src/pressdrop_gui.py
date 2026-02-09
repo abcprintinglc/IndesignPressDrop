@@ -17,6 +17,9 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 # Rasterize PDFs to PNGs when needed
 from PIL import Image
 
+if os.name == "nt":
+    import winreg
+
 from core import MM_PER_INCH, POINTS_PER_INCH, build_press_pdf, load_presets, make_job, parse_bleed, parse_size
 
 
@@ -311,7 +314,10 @@ class App(tk.Tk):
     def _export_pdf_to_png(self, pdf_path: str, dpi: int) -> list[str]:
         outputs: list[str] = []
         manual_gs = self.ghostscript_path.get().strip()
+        manual_gs = self._resolve_ghostscript_path(manual_gs)
         gs_path = manual_gs or shutil.which("gswin64c") or shutil.which("gswin32c") or shutil.which("gs")
+        if not gs_path:
+            gs_path = self._find_ghostscript_from_registry()
         if not gs_path and os.name == "nt":
             common_bins = [
                 r"C:\Program Files\gs\gs10.05.0\bin",
@@ -359,9 +365,61 @@ class App(tk.Tk):
         except Exception as exc:
             raise RuntimeError(
                 "Could not export PNGs. PDF rasterization requires Ghostscript or Poppler."
-                + ("" if gs_path else " Ghostscript was not found on PATH; set GS or PATH and restart.")
+                + ("" if gs_path else " Ghostscript was not found on PATH/registry; set GS or PATH and restart.")
             ) from exc
         return outputs
+
+    def _resolve_ghostscript_path(self, path: str) -> str:
+        if not path:
+            return ""
+        if os.name == "nt" and path.lower().endswith(".lnk"):
+            try:
+                cmd = (
+                    "$s=(New-Object -ComObject WScript.Shell).CreateShortcut('"
+                    + path.replace("'", "''")
+                    + "'); $s.TargetPath"
+                )
+                target = subprocess.check_output(["powershell", "-NoProfile", "-Command", cmd], text=True).strip()
+                return target or path
+            except Exception:
+                return path
+        return path
+
+    def _find_ghostscript_from_registry(self) -> str:
+        if os.name != "nt":
+            return ""
+        keys = [
+            r"SOFTWARE\Ghostscript\GPL Ghostscript",
+            r"SOFTWARE\WOW6432Node\Ghostscript\GPL Ghostscript",
+            r"SOFTWARE\Ghostscript\AGPL Ghostscript",
+            r"SOFTWARE\WOW6432Node\Ghostscript\AGPL Ghostscript",
+        ]
+        for root in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
+            for key_path in keys:
+                try:
+                    with winreg.OpenKey(root, key_path) as key:
+                        idx = 0
+                        versions = []
+                        while True:
+                            try:
+                                versions.append(winreg.EnumKey(key, idx))
+                                idx += 1
+                            except OSError:
+                                break
+                        for version in sorted(versions, reverse=True):
+                            try:
+                                with winreg.OpenKey(key, version) as subkey:
+                                    install_dir, _ = winreg.QueryValueEx(subkey, "GS_DLL")
+                                    bin_dir = os.path.dirname(install_dir)
+                                    for exe_name in ("gswin64c.exe", "gswin32c.exe"):
+                                        candidate = os.path.join(bin_dir, exe_name)
+                                        if os.path.exists(candidate):
+                                            return candidate
+                            except OSError:
+                                continue
+                except OSError:
+                    continue
+        return ""
 
     def _default_indesign_path(self) -> str:
         env_path = os.environ.get("INDESIGN_APP")
