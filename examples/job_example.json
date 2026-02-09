@@ -1,0 +1,23 @@
+{
+  "inputs": [
+    {
+      "path": "C:/path/to/input.pdf",
+      "pages": "1",
+      "pdf_box": "auto"
+    }
+  ],
+  "layout": {
+    "trim": "4x6in",
+    "bleed": "0.125",
+    "fit": "fill_bleed_proportional",
+    "anchor": "center",
+    "auto_rotate": false,
+    "crop_marks": true
+  },
+  "output": {
+    "out_dir": "C:/path/to/output",
+    "basename": "JOBNAME",
+    "make_press_pdf": true,
+    "make_indd": true
+  }
+}

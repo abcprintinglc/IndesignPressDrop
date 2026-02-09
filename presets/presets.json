@@ -1,0 +1,20 @@
+{
+  "Postcard 4x6 + .125": {
+    "trim": "4x6in",
+    "bleed": "0.125",
+    "fit": "fill_bleed_proportional",
+    "crop_marks": true
+  },
+  "Business Card 3.5x2 + .125": {
+    "trim": "3.5x2in",
+    "bleed": "0.125",
+    "fit": "fill_bleed_proportional",
+    "crop_marks": true
+  },
+  "Doorhanger 3.6667x8.5 + .25": {
+    "trim": "3.6667x8.5in",
+    "bleed": "0.25",
+    "fit": "fill_bleed_proportional",
+    "crop_marks": true
+  }
+}
