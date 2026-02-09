@@ -51,20 +51,20 @@ python src\pressdrop_cli.py --input "C:\in\file.pdf" --pages 1-3 --size 4x6in --
 ## Presets
 Edit `presets/presets.json` to add your shop sizes. The GUI reads this file.
 
-## INDD output (optional)
-The Python app writes a **job JSON** alongside your output PDFs.
+## Image output for Generative Fill (optional)
+The desktop GUI can export **PNG images** from the generated press PDF so you can open them directly in InDesign for Generative Fill.
 
-To create an INDD:
-1) Copy `indesign/PressDropBleedFixer.jsx` into InDesign **Scripts Panel** folder
-2) In InDesign: **Window > Utilities > Scripts**
-3) Double-click the script
-4) Select the job JSON file (the one the tool generated)
+The desktop GUI includes:
+- **InDesign App Path** (optional) — set this if auto-open does not work on your machine.
+- **Open output PDF in InDesign (no script)** — opens the PDF in InDesign.
+- **Export PNGs for Generative Fill** — rasterizes the press PDF into PNGs at the chosen DPI.
+- **Export DPI (PNG)** — default 1200 DPI.
+- **Panel Split** — split exported PNGs into trifold (3) or quadfold (4) panels.
+- **Panel Text Margin (in)** — generates safe-area crops with the specified margin per panel.
+- **Save Default** — stores your current GUI settings to `presets/defaults.json` for next launch.
+- **Save Preset** — saves trim/bleed/fit/anchor settings into `presets/presets.json`.
 
-The script will:
-- create a new document with the correct trim + bleed
-- place your source file on page 1 (or multiple pages for PDFs)
-- apply a similar fit mode
-- save an INDD next to the press PDF
+> Note: PNG export from PDFs requires Ghostscript or Poppler on your system.
 
 ## Build an EXE (optional)
 If you want a portable EXE:
