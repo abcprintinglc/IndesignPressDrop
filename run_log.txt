@@ -2,3 +2,16 @@
 PressDrop Pro Launcher 
 =============================== 
 Python 3.14.2
+Traceback (most recent call last):
+  File "C:\Users\abcpr\AppData\Roaming\Adobe\InDesign\Version 21.0\en_US\Scripts\Scripts Panel\IndesignPressDrop\src\pressdrop_gui.py", line 618, in <module>
+    App().mainloop()
+    ~~~^^
+  File "C:\Users\abcpr\AppData\Roaming\Adobe\InDesign\Version 21.0\en_US\Scripts\Scripts Panel\IndesignPressDrop\src\pressdrop_gui.py", line 53, in __init__
+    self._build()
+    ~~~~~~~~~~~^^
+  File "C:\Users\abcpr\AppData\Roaming\Adobe\InDesign\Version 21.0\en_US\Scripts\Scripts Panel\IndesignPressDrop\src\pressdrop_gui.py", line 272, in _build
+    variable=self.launch_indesign,
+             ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python314\Lib\tkinter\__init__.py", line 2566, in __getattr__
+    return getattr(self.tk, attr)
+AttributeError: '_tkinter.tkapp' object has no attribute 'launch_indesign'

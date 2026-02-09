@@ -611,6 +611,7 @@ class App(tk.Tk):
         base = os.path.splitext(os.path.basename(inp))[0] + "_PressDrop"
 
         try:
+            should_emit_job = bool(self.make_indd.get() or self.launch_indesign.get())
             # 1. Create the job structure (BUT don't write JSON yet: emit_job=False)
             job = make_job(
                 input_path=inp,
@@ -624,6 +625,7 @@ class App(tk.Tk):
                 crop_marks=bool(self.crop_marks.get()),
                 out_dir=outdir,
                 basename=base,
+                auto_generative_fill=bool(self.auto_generative_fill.get()),
                 emit_job=False,  # <--- CHANGED: Wait until file is built
             )
 
