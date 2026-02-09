@@ -6,12 +6,18 @@ This GUI is intentionally simple: pick a file, pick a preset or custom trim/blee
 
 from __future__ import annotations
 
+import json
 import os
+import shutil
+import subprocess
+import sys
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 
-# Import write_job_json so we can save the ticket AFTER generating the file
-from core import build_press_pdf, load_presets, make_job, write_job_json
+# Rasterize PDFs to PNGs when needed
+from PIL import Image
+
+from core import build_press_pdf, load_presets, make_job
 
 
 def resource_path(rel: str) -> str:
@@ -23,9 +29,12 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("PressDrop Bleed Fixer (v2.2 Pro)")
-        self.geometry("880x540")
+        self.geometry("900x700")
+        self.minsize(820, 620)
 
         self.presets = load_presets(resource_path("../presets/presets.json"))  # dict name->settings
+        self.presets_path = resource_path("../presets/presets.json")
+        self.defaults_path = resource_path("../presets/defaults.json")
         self.input_path = tk.StringVar(value="")
         self.output_dir = tk.StringVar(value=os.path.join(os.path.expanduser("~"), "Desktop"))
         self.size = tk.StringVar(value="4x6in")
@@ -35,8 +44,13 @@ class App(tk.Tk):
         self.anchor = tk.StringVar(value="center")
         self.bleed_generator = tk.StringVar(value="none")
         self.crop_marks = tk.BooleanVar(value=True)
-        self.make_indd = tk.BooleanVar(value=False)
+        self.launch_indesign = tk.BooleanVar(value=False)
+        self.open_output_in_indesign = tk.BooleanVar(value=False)
+        self.export_png = tk.BooleanVar(value=False)
+        self.export_dpi = tk.StringVar(value="1200")
+        self.indesign_app = tk.StringVar(value=os.environ.get("INDESIGN_APP", ""))
 
+        self._load_defaults()
         self._build()
 
     
@@ -52,8 +66,18 @@ class App(tk.Tk):
         pad_y = 10
         pad_x = 14
 
-        container = tk.Frame(self, bg=BG)
-        container.pack(fill="both", expand=True, padx=pad_x, pady=pad_y)
+        scroll_container = tk.Frame(self, bg=BG)
+        scroll_container.pack(fill="both", expand=True, padx=pad_x, pady=pad_y)
+
+        canvas = tk.Canvas(scroll_container, bg=BG, highlightthickness=0)
+        scrollbar = tk.Scrollbar(scroll_container, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+
+        container = tk.Frame(canvas, bg=BG)
+        canvas_window = canvas.create_window((0, 0), window=container, anchor="nw")
 
         def make_label(row, text):
             lbl = tk.Label(
@@ -119,6 +143,37 @@ class App(tk.Tk):
         self.preset_combo.bind("<<ComboboxSelected>>", self.apply_preset)
 
         row += 1
+        make_label(row, "Preset Actions:")
+        preset_actions = tk.Frame(container, bg=BG)
+        preset_actions.grid(row=row, column=1, sticky="w", padx=(14, 10), pady=6)
+        tk.Button(
+            preset_actions,
+            text="Save Preset",
+            command=self.save_preset,
+            bg=BTN,
+            fg=TXT,
+            activebackground=BTN,
+            activeforeground=TXT,
+            relief="flat",
+            padx=10,
+            pady=4,
+            font=("Segoe UI", 9, "bold"),
+        ).pack(side="left", padx=(0, 8))
+        tk.Button(
+            preset_actions,
+            text="Save Default",
+            command=self.save_default,
+            bg=BTN,
+            fg=TXT,
+            activebackground=BTN,
+            activeforeground=TXT,
+            relief="flat",
+            padx=10,
+            pady=4,
+            font=("Segoe UI", 9, "bold"),
+        ).pack(side="left")
+
+        row += 1
         make_label(row, "Trim Size WxH: (e.g., 4x6in, 101.6x152.4mm):")
         make_entry(row, self.size)
 
@@ -172,10 +227,14 @@ class App(tk.Tk):
         cb1.grid(row=row, column=1, sticky="w", padx=(14, 10), pady=(10, 2))
 
         row += 1
-        cb2 = tk.Checkbutton(
+        make_label(row, "InDesign App Path (optional):")
+        make_entry(row, self.indesign_app)
+
+        row += 1
+        cb_output = tk.Checkbutton(
             container,
-            text="Also create an INDD job ticket (finish via InDesign JSX)",
-            variable=self.make_indd,
+            text="Open output PDF in InDesign (no script)",
+            variable=self.open_output_in_indesign,
             bg=BG,
             fg=TXT,
             activebackground=BG,
@@ -183,7 +242,25 @@ class App(tk.Tk):
             selectcolor=BG,
             font=("Segoe UI", 10),
         )
-        cb2.grid(row=row, column=1, sticky="w", padx=(14, 10), pady=(2, 10))
+        cb_output.grid(row=row, column=1, sticky="w", padx=(14, 10), pady=(2, 4))
+
+        row += 1
+        cb_png = tk.Checkbutton(
+            container,
+            text="Export PNGs for Generative Fill",
+            variable=self.export_png,
+            bg=BG,
+            fg=TXT,
+            activebackground=BG,
+            activeforeground=TXT,
+            selectcolor=BG,
+            font=("Segoe UI", 10),
+        )
+        cb_png.grid(row=row, column=1, sticky="w", padx=(14, 10), pady=(2, 4))
+
+        row += 1
+        make_label(row, "Export DPI (PNG):")
+        make_entry(row, self.export_dpi)
 
         row += 1
         run_btn = tk.Button(
@@ -202,6 +279,191 @@ class App(tk.Tk):
         run_btn.grid(row=row, column=2, sticky="e", pady=10)
 
         container.columnconfigure(1, weight=1)
+
+        def _on_frame_configure(_event):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        def _on_canvas_configure(event):
+            canvas.itemconfig(canvas_window, width=event.width)
+
+        container.bind("<Configure>", _on_frame_configure)
+        canvas.bind("<Configure>", _on_canvas_configure)
+
+    def _export_pdf_to_png(self, pdf_path: str, dpi: int) -> list[str]:
+        outputs: list[str] = []
+        try:
+            with Image.open(pdf_path) as img:
+                total_frames = getattr(img, "n_frames", 1)
+                for idx in range(total_frames):
+                    img.seek(idx)
+                    rgb = img.convert("RGB")
+                    suffix = f"_page_{idx + 1:03d}" if total_frames > 1 else ""
+                    out_path = os.path.splitext(pdf_path)[0] + f"{suffix}.png"
+                    rgb.save(out_path, dpi=(dpi, dpi))
+                    outputs.append(out_path)
+        except Exception as exc:
+            raise RuntimeError(
+                "Could not export PNGs. PDF rasterization requires Ghostscript or Poppler."
+            ) from exc
+        return outputs
+
+    def _launch_indesign_file(self, file_path: str) -> None:
+        app_path = self.indesign_app.get().strip()
+        try:
+            if app_path:
+                subprocess.Popen([app_path, file_path])
+                return
+            if sys.platform.startswith("darwin"):
+                subprocess.Popen(["open", "-a", "Adobe InDesign", file_path])
+                return
+            if os.name == "nt":
+                path_candidate = shutil.which("InDesign.exe")
+                if path_candidate:
+                    subprocess.Popen([path_candidate, file_path])
+                    return
+                common_paths = [
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign 2026\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign 2025\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign 2024\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign 2023\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign 2022\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign 2021\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign 2020\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign CC 2019\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign CC 2018\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign CC 2017\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign CC 2016\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign CC 2015\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign CC 2014\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign CC\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign CS6\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign CS5\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign CS4\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign CS3\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign 2024\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign 2023\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign 2022\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign 2021\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign 2020\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CC 2019\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CC 2018\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CC 2017\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CC 2016\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CC 2015\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CC 2014\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CC\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CS6\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CS5\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CS4\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CS3\\InDesign.exe",
+                ]
+                for candidate in common_paths:
+                    if os.path.exists(candidate):
+                        subprocess.Popen([candidate, file_path])
+                        return
+                raise RuntimeError("InDesign executable not found. Set the InDesign App Path.")
+            subprocess.Popen(["xdg-open", file_path])
+        except Exception as exc:
+            raise RuntimeError(
+                "Could not open the output in InDesign. Provide the InDesign App Path or open manually."
+            ) from exc
+
+    def _load_defaults(self) -> None:
+        if not os.path.exists(self.defaults_path):
+            return
+        try:
+            with open(self.defaults_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            return
+        self._apply_settings(data, include_input=False)
+
+    def _apply_settings(self, data: dict, include_input: bool = True) -> None:
+        if include_input and "input_path" in data:
+            self.input_path.set(data["input_path"])
+        if "output_dir" in data:
+            self.output_dir.set(data["output_dir"])
+        if "size" in data:
+            self.size.set(data["size"])
+        if "bleed" in data:
+            self.bleed.set(str(data["bleed"]))
+        if "pages" in data:
+            self.pages.set(data["pages"])
+        if "fit_mode" in data:
+            self.fit_mode.set(data["fit_mode"])
+        if "anchor" in data:
+            self.anchor.set(data["anchor"])
+        if "bleed_generator" in data:
+            self.bleed_generator.set(data["bleed_generator"])
+        if "crop_marks" in data:
+            self.crop_marks.set(bool(data["crop_marks"]))
+        if "launch_indesign" in data:
+            self.launch_indesign.set(bool(data["launch_indesign"]))
+        if "open_output_in_indesign" in data:
+            self.open_output_in_indesign.set(bool(data["open_output_in_indesign"]))
+        if "export_png" in data:
+            self.export_png.set(bool(data["export_png"]))
+        if "export_dpi" in data:
+            self.export_dpi.set(str(data["export_dpi"]))
+        if "indesign_app" in data:
+            self.indesign_app.set(data["indesign_app"])
+
+    def _collect_defaults(self) -> dict:
+        return {
+            "output_dir": self.output_dir.get().strip(),
+            "size": self.size.get().strip(),
+            "bleed": self.bleed.get().strip(),
+            "pages": self.pages.get().strip(),
+            "fit_mode": self.fit_mode.get().strip(),
+            "anchor": self.anchor.get().strip(),
+            "bleed_generator": self.bleed_generator.get().strip(),
+            "crop_marks": bool(self.crop_marks.get()),
+            "launch_indesign": bool(self.launch_indesign.get()),
+            "open_output_in_indesign": bool(self.open_output_in_indesign.get()),
+            "export_png": bool(self.export_png.get()),
+            "export_dpi": self.export_dpi.get().strip(),
+            "indesign_app": self.indesign_app.get().strip(),
+        }
+
+    def save_default(self) -> None:
+        data = self._collect_defaults()
+        try:
+            os.makedirs(os.path.dirname(self.defaults_path), exist_ok=True)
+            with open(self.defaults_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            messagebox.showinfo("Defaults Saved", f"Defaults saved to:\n{self.defaults_path}")
+        except Exception as exc:
+            messagebox.showerror("Error", f"Failed to save defaults:\n{exc}")
+
+    def save_preset(self) -> None:
+        name = simpledialog.askstring("Save Preset", "Preset name:")
+        if not name:
+            return
+        name = name.strip()
+        if not name:
+            return
+        preset = {
+            "trim": self.size.get().strip(),
+            "bleed": self.bleed.get().strip(),
+            "fit": self.fit_mode.get().strip(),
+            "anchor": self.anchor.get().strip(),
+            "bleed_generator": self.bleed_generator.get().strip(),
+            "crop_marks": bool(self.crop_marks.get()),
+        }
+        try:
+            with open(self.presets_path, "r", encoding="utf-8") as f:
+                presets = json.load(f)
+        except Exception:
+            presets = {}
+        presets[name] = preset
+        try:
+            with open(self.presets_path, "w", encoding="utf-8") as f:
+                json.dump(presets, f, indent=2)
+            self.presets = presets
+            self.preset_combo["values"] = ["(custom)"] + sorted(self.presets.keys())
+            messagebox.showinfo("Preset Saved", f"Preset saved:\n{name}")
+        except Exception as exc:
+            messagebox.showerror("Error", f"Failed to save preset:\n{exc}")
 
     def pick_input(self):
         path = filedialog.askopenfilename(
@@ -234,6 +496,10 @@ class App(tk.Tk):
             self.bleed.set(str(p["bleed"]))
         if "fit" in p:
             self.fit_mode.set(p["fit"])
+        if "anchor" in p:
+            self.anchor.set(p["anchor"])
+        if "bleed_generator" in p:
+            self.bleed_generator.set(p["bleed_generator"])
         if "crop_marks" in p:
             self.crop_marks.set(bool(p["crop_marks"]))
 
@@ -271,25 +537,16 @@ class App(tk.Tk):
             
             msg = "Created:\n" + "\n".join(outputs)
             
-            # 3. NOW create the JSON pointing to the *Processed* file
-            if self.make_indd.get():
-                if outputs:
-                    # Point the InDesign JSON to the NEW file (outputs[0])
-                    # This ensures InDesign places the file WITH the bleed/mirror, 
-                    # not the original.
-                    job["inputs"][0]["path"] = outputs[0]
-                    
-                    # Update page count (Generated PDF is usually 1 page per file in this tool)
-                    job["inputs"][0]["pages"] = "1" 
-                    
-                job_json_path = os.path.join(outdir, f"{base}.job.json")
-                job["output"]["job_json_path"] = job_json_path
-                
-                # Use the imported helper to write it
-                write_job_json(job, job_json_path)
+            png_outputs: list[str] = []
+            if self.export_png.get():
+                dpi_value = int(self.export_dpi.get().strip() or "1200")
+                png_outputs = self._export_pdf_to_png(outputs[0], dpi_value)
+                msg += "\n\nPNGs:\n" + "\n".join(png_outputs)
 
-                msg += f"\n\nJob ticket:\n{job_json_path}"
-                msg += "\n\n--> Now run the script in InDesign!"
+            if self.open_output_in_indesign.get():
+                to_open = png_outputs[0] if png_outputs else outputs[0]
+                self._launch_indesign_file(to_open)
+                msg += f"\n\nOpening in InDesign:\n{to_open}"
 
             messagebox.showinfo("Done", msg)
             
