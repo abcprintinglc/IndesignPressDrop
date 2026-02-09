@@ -66,6 +66,16 @@ The script will:
 - apply a similar fit mode
 - save an INDD next to the press PDF
 
+### Auto-launch InDesign + Generative Fill (desktop GUI)
+The desktop GUI includes:
+- **InDesign App Path** (optional) — set this if auto-launch does not work on your machine.
+- **Launch InDesign + run job script** — opens InDesign and runs the JSX.
+- **Auto-trigger Generative Fill** — attempts to invoke InDesign’s Generative Fill menu after placing each page.
+- **Save Default** — stores your current GUI settings to `presets/defaults.json` for next launch.
+- **Save Preset** — saves trim/bleed/fit/anchor settings into `presets/presets.json`.
+
+If auto-launch fails, run the JSX manually from InDesign’s Scripts panel.
+
 ## Build an EXE (optional)
 If you want a portable EXE:
 
