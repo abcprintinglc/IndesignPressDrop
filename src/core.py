@@ -440,6 +440,7 @@ def make_job(
     crop_marks: bool,
     out_dir: str,
     basename: Optional[str] = None,
+    auto_generative_fill: bool = False,
     emit_job: bool = False,
 ) -> Dict:
     w, h, unit = parse_size(trim_size_spec)
@@ -471,6 +472,9 @@ def make_job(
             "fit_mode": fit_mode, "anchor": anchor,
             "bleed_generator": (bleed_generator or "none").lower().strip(),
             "marks": {"crop_marks": bool(crop_marks)}
+        },
+        "indesign": {
+            "auto_generative_fill": bool(auto_generative_fill)
         },
         "output": {"dir": os.path.abspath(out_dir), "basename": basename}
     }
