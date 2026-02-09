@@ -311,6 +311,7 @@ class App(tk.Tk):
     def _export_pdf_to_png(self, pdf_path: str, dpi: int) -> list[str]:
         outputs: list[str] = []
         manual_gs = self.ghostscript_path.get().strip()
+        manual_gs = self._resolve_ghostscript_path(manual_gs)
         gs_path = manual_gs or shutil.which("gswin64c") or shutil.which("gswin32c") or shutil.which("gs")
         if not gs_path and os.name == "nt":
             common_bins = [
@@ -362,6 +363,22 @@ class App(tk.Tk):
                 + ("" if gs_path else " Ghostscript was not found on PATH; set GS or PATH and restart.")
             ) from exc
         return outputs
+
+    def _resolve_ghostscript_path(self, path: str) -> str:
+        if not path:
+            return ""
+        if os.name == "nt" and path.lower().endswith(".lnk"):
+            try:
+                cmd = (
+                    "$s=(New-Object -ComObject WScript.Shell).CreateShortcut('"
+                    + path.replace("'", "''")
+                    + "'); $s.TargetPath"
+                )
+                target = subprocess.check_output(["powershell", "-NoProfile", "-Command", cmd], text=True).strip()
+                return target or path
+            except Exception:
+                return path
+        return path
 
     def _default_indesign_path(self) -> str:
         env_path = os.environ.get("INDESIGN_APP")
