@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tkinter as tk
@@ -315,17 +316,45 @@ class App(tk.Tk):
                 subprocess.Popen(["open", "-a", "Adobe InDesign", script_path])
                 return
             if os.name == "nt":
+                path_candidate = shutil.which("InDesign.exe")
+                if path_candidate:
+                    subprocess.Popen([path_candidate, "-script", script_path])
+                    return
                 common_paths = [
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign 2026\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign 2025\\InDesign.exe",
                     r"C:\\Program Files\\Adobe\\Adobe InDesign 2024\\InDesign.exe",
                     r"C:\\Program Files\\Adobe\\Adobe InDesign 2023\\InDesign.exe",
                     r"C:\\Program Files\\Adobe\\Adobe InDesign 2022\\InDesign.exe",
                     r"C:\\Program Files\\Adobe\\Adobe InDesign 2021\\InDesign.exe",
                     r"C:\\Program Files\\Adobe\\Adobe InDesign 2020\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign CC 2019\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign CC 2018\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign CC 2017\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign CC 2016\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign CC 2015\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign CC 2014\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign CC\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign CS6\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign CS5\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign CS4\\InDesign.exe",
+                    r"C:\\Program Files\\Adobe\\Adobe InDesign CS3\\InDesign.exe",
                     r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign 2024\\InDesign.exe",
                     r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign 2023\\InDesign.exe",
                     r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign 2022\\InDesign.exe",
                     r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign 2021\\InDesign.exe",
                     r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign 2020\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CC 2019\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CC 2018\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CC 2017\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CC 2016\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CC 2015\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CC 2014\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CC\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CS6\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CS5\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CS4\\InDesign.exe",
+                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CS3\\InDesign.exe",
                 ]
                 for candidate in common_paths:
                     if os.path.exists(candidate):
