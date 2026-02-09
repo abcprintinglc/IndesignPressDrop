@@ -18,6 +18,7 @@ if (!JSON.parse) {
 
 var PRESSDROP_JOB_JSON_PATH = typeof PRESSDROP_JOB_JSON_PATH !== "undefined" ? PRESSDROP_JOB_JSON_PATH : null;
 var PRESSDROP_AUTO_GENERATIVE_FILL = typeof PRESSDROP_AUTO_GENERATIVE_FILL !== "undefined" ? PRESSDROP_AUTO_GENERATIVE_FILL : null;
+var PRESSDROP_OUTLINE_TEXT = typeof PRESSDROP_OUTLINE_TEXT !== "undefined" ? PRESSDROP_OUTLINE_TEXT : null;
 
 function readTextFile(file) {
   file.encoding = "UTF-8";
@@ -95,6 +96,22 @@ function runGenerativeFill() {
   return false;
 }
 
+function outlineAllText(doc) {
+  var outlined = false;
+  for (var i = doc.stories.length - 1; i >= 0; i--) {
+    var story = doc.stories[i];
+    try {
+      if (story && story.texts && story.texts.length > 0) {
+        story.texts[0].createOutlines();
+        outlined = true;
+      }
+    } catch (e) {
+      // ignore outline failures
+    }
+  }
+  return outlined;
+}
+
 function main() {
   var jobFile = pickJobFile();
   if (!jobFile) return;
@@ -103,6 +120,9 @@ function main() {
   var autoFill = false;
   if (job && job.indesign && job.indesign.auto_generative_fill) autoFill = true;
   if (PRESSDROP_AUTO_GENERATIVE_FILL !== null) autoFill = PRESSDROP_AUTO_GENERATIVE_FILL === true;
+  var outlineText = false;
+  if (job && job.indesign && job.indesign.outline_text) outlineText = true;
+  if (PRESSDROP_OUTLINE_TEXT !== null) outlineText = PRESSDROP_OUTLINE_TEXT === true;
 
   // 1. Setup Document Dimensions
   var unit = job.layout.trim.unit || "in";
@@ -204,6 +224,13 @@ function main() {
       } catch(e) {
           frame.contents = "Error placing page " + pageNum;
       }
+  }
+
+  if (outlineText) {
+    var outlined = outlineAllText(doc);
+    if (!outlined) {
+      alert("No editable text found to outline. PDFs placed as links are not editable.");
+    }
   }
 
   doc.save(outIndd);

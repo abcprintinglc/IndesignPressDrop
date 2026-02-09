@@ -14,8 +14,10 @@ import sys
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
-# Import write_job_json so we can save the ticket AFTER generating the file
-from core import build_press_pdf, load_presets, make_job, write_job_json
+# Rasterize PDFs to PNGs when needed
+from PIL import Image
+
+from core import build_press_pdf, load_presets, make_job
 
 
 def resource_path(rel: str) -> str:
@@ -42,10 +44,9 @@ class App(tk.Tk):
         self.anchor = tk.StringVar(value="center")
         self.bleed_generator = tk.StringVar(value="none")
         self.crop_marks = tk.BooleanVar(value=True)
-        self.make_indd = tk.BooleanVar(value=False)
-        self.launch_indesign = tk.BooleanVar(value=False)
         self.open_output_in_indesign = tk.BooleanVar(value=False)
-        self.auto_generative_fill = tk.BooleanVar(value=False)
+        self.export_png = tk.BooleanVar(value=False)
+        self.export_dpi = tk.StringVar(value="1200")
         self.indesign_app = tk.StringVar(value=os.environ.get("INDESIGN_APP", ""))
 
         self._load_defaults()
@@ -225,10 +226,14 @@ class App(tk.Tk):
         cb1.grid(row=row, column=1, sticky="w", padx=(14, 10), pady=(10, 2))
 
         row += 1
-        cb2 = tk.Checkbutton(
+        make_label(row, "InDesign App Path (optional):")
+        make_entry(row, self.indesign_app)
+
+        row += 1
+        cb_output = tk.Checkbutton(
             container,
-            text="Also create an INDD job ticket (finish via InDesign JSX)",
-            variable=self.make_indd,
+            text="Open output PDF in InDesign (no script)",
+            variable=self.open_output_in_indesign,
             bg=BG,
             fg=TXT,
             activebackground=BG,
@@ -236,7 +241,25 @@ class App(tk.Tk):
             selectcolor=BG,
             font=("Segoe UI", 10),
         )
-        cb2.grid(row=row, column=1, sticky="w", padx=(14, 10), pady=(2, 10))
+        cb_output.grid(row=row, column=1, sticky="w", padx=(14, 10), pady=(2, 4))
+
+        row += 1
+        cb_png = tk.Checkbutton(
+            container,
+            text="Export PNGs for Generative Fill",
+            variable=self.export_png,
+            bg=BG,
+            fg=TXT,
+            activebackground=BG,
+            activeforeground=TXT,
+            selectcolor=BG,
+            font=("Segoe UI", 10),
+        )
+        cb_png.grid(row=row, column=1, sticky="w", padx=(14, 10), pady=(2, 4))
+
+        row += 1
+        make_label(row, "Export DPI (PNG):")
+        make_entry(row, self.export_dpi)
 
         row += 1
         make_label(row, "InDesign App Path (optional):")
@@ -311,76 +334,23 @@ class App(tk.Tk):
         container.bind("<Configure>", _on_frame_configure)
         canvas.bind("<Configure>", _on_canvas_configure)
 
-    def _write_indesign_launcher(self, job_json_path: str) -> str:
-        script_src = resource_path("../indesign/PressDropBleedFixer.jsx")
-        launcher_dir = os.path.dirname(job_json_path)
-        launcher_path = os.path.join(launcher_dir, "PressDropBleedFixer_Run.jsx")
-        with open(launcher_path, "w", encoding="utf-8") as f:
-            f.write('var PRESSDROP_JOB_JSON_PATH = "' + job_json_path.replace("\\", "\\\\") + '";\n')
-            f.write("var PRESSDROP_AUTO_GENERATIVE_FILL = " + ("true" if self.auto_generative_fill.get() else "false") + ";\n")
-            f.write('#include "' + script_src.replace("\\", "\\\\") + '"\n')
-        return launcher_path
-
-    def _launch_indesign_script(self, script_path: str) -> None:
-        app_path = self.indesign_app.get().strip()
+    def _export_pdf_to_png(self, pdf_path: str, dpi: int) -> list[str]:
+        outputs: list[str] = []
         try:
-            if app_path:
-                subprocess.Popen([app_path, "-script", script_path])
-                return
-            if sys.platform.startswith("darwin"):
-                subprocess.Popen(["open", "-a", "Adobe InDesign", script_path])
-                return
-            if os.name == "nt":
-                path_candidate = shutil.which("InDesign.exe")
-                if path_candidate:
-                    subprocess.Popen([path_candidate, "-script", script_path])
-                    return
-                common_paths = [
-                    r"C:\\Program Files\\Adobe\\Adobe InDesign 2026\\InDesign.exe",
-                    r"C:\\Program Files\\Adobe\\Adobe InDesign 2025\\InDesign.exe",
-                    r"C:\\Program Files\\Adobe\\Adobe InDesign 2024\\InDesign.exe",
-                    r"C:\\Program Files\\Adobe\\Adobe InDesign 2023\\InDesign.exe",
-                    r"C:\\Program Files\\Adobe\\Adobe InDesign 2022\\InDesign.exe",
-                    r"C:\\Program Files\\Adobe\\Adobe InDesign 2021\\InDesign.exe",
-                    r"C:\\Program Files\\Adobe\\Adobe InDesign 2020\\InDesign.exe",
-                    r"C:\\Program Files\\Adobe\\Adobe InDesign CC 2019\\InDesign.exe",
-                    r"C:\\Program Files\\Adobe\\Adobe InDesign CC 2018\\InDesign.exe",
-                    r"C:\\Program Files\\Adobe\\Adobe InDesign CC 2017\\InDesign.exe",
-                    r"C:\\Program Files\\Adobe\\Adobe InDesign CC 2016\\InDesign.exe",
-                    r"C:\\Program Files\\Adobe\\Adobe InDesign CC 2015\\InDesign.exe",
-                    r"C:\\Program Files\\Adobe\\Adobe InDesign CC 2014\\InDesign.exe",
-                    r"C:\\Program Files\\Adobe\\Adobe InDesign CC\\InDesign.exe",
-                    r"C:\\Program Files\\Adobe\\Adobe InDesign CS6\\InDesign.exe",
-                    r"C:\\Program Files\\Adobe\\Adobe InDesign CS5\\InDesign.exe",
-                    r"C:\\Program Files\\Adobe\\Adobe InDesign CS4\\InDesign.exe",
-                    r"C:\\Program Files\\Adobe\\Adobe InDesign CS3\\InDesign.exe",
-                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign 2024\\InDesign.exe",
-                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign 2023\\InDesign.exe",
-                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign 2022\\InDesign.exe",
-                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign 2021\\InDesign.exe",
-                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign 2020\\InDesign.exe",
-                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CC 2019\\InDesign.exe",
-                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CC 2018\\InDesign.exe",
-                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CC 2017\\InDesign.exe",
-                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CC 2016\\InDesign.exe",
-                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CC 2015\\InDesign.exe",
-                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CC 2014\\InDesign.exe",
-                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CC\\InDesign.exe",
-                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CS6\\InDesign.exe",
-                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CS5\\InDesign.exe",
-                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CS4\\InDesign.exe",
-                    r"C:\\Program Files (x86)\\Adobe\\Adobe InDesign CS3\\InDesign.exe",
-                ]
-                for candidate in common_paths:
-                    if os.path.exists(candidate):
-                        subprocess.Popen([candidate, "-script", script_path])
-                        return
-                raise RuntimeError("InDesign executable not found. Set the InDesign App Path.")
-            subprocess.Popen(["xdg-open", script_path])
+            with Image.open(pdf_path) as img:
+                total_frames = getattr(img, "n_frames", 1)
+                for idx in range(total_frames):
+                    img.seek(idx)
+                    rgb = img.convert("RGB")
+                    suffix = f"_page_{idx + 1:03d}" if total_frames > 1 else ""
+                    out_path = os.path.splitext(pdf_path)[0] + f"{suffix}.png"
+                    rgb.save(out_path, dpi=(dpi, dpi))
+                    outputs.append(out_path)
         except Exception as exc:
             raise RuntimeError(
-                "Could not launch InDesign. Provide the InDesign App Path or run the JSX script manually."
+                "Could not export PNGs. PDF rasterization requires Ghostscript or Poppler."
             ) from exc
+        return outputs
 
     def _launch_indesign_file(self, file_path: str) -> None:
         app_path = self.indesign_app.get().strip()
@@ -472,14 +442,12 @@ class App(tk.Tk):
             self.bleed_generator.set(data["bleed_generator"])
         if "crop_marks" in data:
             self.crop_marks.set(bool(data["crop_marks"]))
-        if "make_indd" in data:
-            self.make_indd.set(bool(data["make_indd"]))
-        if "launch_indesign" in data:
-            self.launch_indesign.set(bool(data["launch_indesign"]))
         if "open_output_in_indesign" in data:
             self.open_output_in_indesign.set(bool(data["open_output_in_indesign"]))
-        if "auto_generative_fill" in data:
-            self.auto_generative_fill.set(bool(data["auto_generative_fill"]))
+        if "export_png" in data:
+            self.export_png.set(bool(data["export_png"]))
+        if "export_dpi" in data:
+            self.export_dpi.set(str(data["export_dpi"]))
         if "indesign_app" in data:
             self.indesign_app.set(data["indesign_app"])
 
@@ -493,10 +461,9 @@ class App(tk.Tk):
             "anchor": self.anchor.get().strip(),
             "bleed_generator": self.bleed_generator.get().strip(),
             "crop_marks": bool(self.crop_marks.get()),
-            "make_indd": bool(self.make_indd.get()),
-            "launch_indesign": bool(self.launch_indesign.get()),
             "open_output_in_indesign": bool(self.open_output_in_indesign.get()),
-            "auto_generative_fill": bool(self.auto_generative_fill.get()),
+            "export_png": bool(self.export_png.get()),
+            "export_dpi": self.export_dpi.get().strip(),
             "indesign_app": self.indesign_app.get().strip(),
         }
 
@@ -614,25 +581,16 @@ class App(tk.Tk):
             
             msg = "Created:\n" + "\n".join(outputs)
             
-            # 3. NOW create the JSON pointing to the *Processed* file
-            if should_emit_job:
-                if outputs:
-                    # Point the InDesign JSON to the NEW file (outputs[0])
-                    # This ensures InDesign places the file WITH the bleed/mirror, 
-                    # not the original.
-                    job["inputs"][0]["path"] = outputs[0]
-                    
-                    # Update page count (Generated PDF is usually 1 page per file in this tool)
-                    job["inputs"][0]["pages"] = "1" 
-                    
-                job_json_path = os.path.join(outdir, f"{base}.job.json")
-                job["output"]["job_json_path"] = job_json_path
-                
-                # Use the imported helper to write it
-                write_job_json(job, job_json_path)
+            png_outputs: list[str] = []
+            if self.export_png.get():
+                dpi_value = int(self.export_dpi.get().strip() or "1200")
+                png_outputs = self._export_pdf_to_png(outputs[0], dpi_value)
+                msg += "\n\nPNGs:\n" + "\n".join(png_outputs)
 
-                msg += f"\n\nJob ticket:\n{job_json_path}"
-                msg += "\n\n--> Now run the script in InDesign!"
+            if self.open_output_in_indesign.get():
+                to_open = png_outputs[0] if png_outputs else outputs[0]
+                self._launch_indesign_file(to_open)
+                msg += f"\n\nOpening in InDesign:\n{to_open}"
 
                 if self.launch_indesign.get():
                     launcher_path = self._write_indesign_launcher(job_json_path)
