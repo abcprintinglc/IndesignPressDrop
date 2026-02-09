@@ -52,6 +52,7 @@ class App(tk.Tk):
         self.auto_generative_fill = tk.BooleanVar(value=False)
         self.panel_split = tk.StringVar(value="none")
         self.panel_margin = tk.StringVar(value="0.125")
+        self.ghostscript_path = tk.StringVar(value=os.environ.get("GS", ""))
         self.indesign_app = tk.StringVar(value=self._default_indesign_path())
 
         self._load_defaults()
@@ -277,6 +278,10 @@ class App(tk.Tk):
         make_entry(row, self.panel_margin)
 
         row += 1
+        make_label(row, "Ghostscript Path (gswin64c.exe):")
+        make_entry(row, self.ghostscript_path)
+
+        row += 1
         run_btn = tk.Button(
             container,
             text="Run",
@@ -305,7 +310,8 @@ class App(tk.Tk):
 
     def _export_pdf_to_png(self, pdf_path: str, dpi: int) -> list[str]:
         outputs: list[str] = []
-        gs_path = shutil.which("gswin64c") or shutil.which("gswin32c") or shutil.which("gs")
+        manual_gs = self.ghostscript_path.get().strip()
+        gs_path = manual_gs or shutil.which("gswin64c") or shutil.which("gswin32c") or shutil.which("gs")
         if not gs_path and os.name == "nt":
             common_bins = [
                 r"C:\Program Files\gs\gs10.05.0\bin",
@@ -339,6 +345,8 @@ class App(tk.Tk):
                     os.environ["PATH"] = bin_path + os.pathsep + os.environ.get("PATH", "")
                     break
         try:
+            if gs_path:
+                os.environ["GS"] = gs_path
             with Image.open(pdf_path) as img:
                 total_frames = getattr(img, "n_frames", 1)
                 for idx in range(total_frames):
@@ -543,6 +551,8 @@ class App(tk.Tk):
             self.panel_split.set(str(data["panel_split"]))
         if "panel_margin" in data:
             self.panel_margin.set(str(data["panel_margin"]))
+        if "ghostscript_path" in data:
+            self.ghostscript_path.set(str(data["ghostscript_path"]))
         if "indesign_app" in data:
             self.indesign_app.set(data["indesign_app"])
 
@@ -564,6 +574,7 @@ class App(tk.Tk):
             "auto_generative_fill": bool(self.auto_generative_fill.get()),
             "panel_split": self.panel_split.get().strip(),
             "panel_margin": self.panel_margin.get().strip(),
+            "ghostscript_path": self.ghostscript_path.get().strip(),
             "indesign_app": self.indesign_app.get().strip(),
         }
 

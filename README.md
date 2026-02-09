@@ -61,6 +61,7 @@ The desktop GUI includes:
 - **Export DPI (PNG)** — default 1200 DPI.
 - **Panel Split** — split exported PNGs into trifold (3) or quadfold (4) panels.
 - **Panel Text Margin (in)** — generates safe-area crops with the specified margin per panel.
+- **Ghostscript Path** — optional full path to `gswin64c.exe` if PNG export still fails.
 - **Save Default** — stores your current GUI settings to `presets/defaults.json` for next launch.
 - **Save Preset** — saves trim/bleed/fit/anchor settings into `presets/presets.json`.
 
