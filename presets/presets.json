@@ -32,5 +32,13 @@
     "anchor": "center",
     "bleed_generator": "none",
     "crop_marks": false
+  },
+  "8.5x11inStretchTrimMirrorBleed": {
+    "trim": "8.5x11in",
+    "bleed": "0.125",
+    "fit": "stretch_trim",
+    "anchor": "center",
+    "bleed_generator": "mirror",
+    "crop_marks": false
   }
 }
