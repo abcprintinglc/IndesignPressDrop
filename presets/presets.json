@@ -24,5 +24,13 @@
     "anchor": "center",
     "bleed_generator": "none",
     "crop_marks": false
+  },
+  "5.25x7.25-AddMarginsStretchtoBleed": {
+    "trim": "5x7in",
+    "bleed": "0.125",
+    "fit": "stretch_bleed",
+    "anchor": "center",
+    "bleed_generator": "none",
+    "crop_marks": false
   }
 }
